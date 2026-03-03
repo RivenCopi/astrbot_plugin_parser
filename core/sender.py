@@ -51,6 +51,11 @@ class MessageSender:
         self.cfg = config
         self.renderer = renderer
 
+    def _to_file_uri(self, path: Path) -> str:
+        if not path.is_absolute():
+            path = path.resolve()
+        return path.as_uri()
+
     def _build_send_plan(self, result: ParseResult) -> dict:
         """
         根据解析结果生成发送计划（plan）
@@ -109,7 +114,7 @@ class MessageSender:
             return
 
         if image_path := await self.renderer.render_card(result):
-            await event.send(event.chain_result([Image(str(image_path))]))
+            await event.send(event.chain_result([Image(self._to_file_uri(image_path))]))
 
 
     async def _build_segments(
@@ -129,7 +134,7 @@ class MessageSender:
         # 合并转发时，卡片以内联形式作为一个消息段参与合并
         if plan["render_card"] and plan["force_merge"]:
             if image_path := await self.renderer.render_card(result):
-                segs.append(Image(str(image_path)))
+                segs.append(Image(self._to_file_uri(image_path)))
 
         # 轻媒体处理
         for cont in plan["light"]:
@@ -144,9 +149,10 @@ class MessageSender:
 
             match cont:
                 case ImageContent():
-                    segs.append(Image(str(path)))
+                    segs.append(Image(self._to_file_uri(path)))
                 case GraphicsContent() as g:
-                    segs.append(Image(str(path)))
+                    # OneBot/aiocqhttp 本地文件参数要求 file:// URI，而非裸本地路径。
+                    segs.append(Image(self._to_file_uri(path)))
                     # GraphicsContent 允许携带补充文本
                     if g.text:
                         segs.append(Plain(g.text))
@@ -167,15 +173,15 @@ class MessageSender:
 
             match cont:
                 case VideoContent() | DynamicContent():
-                    segs.append(Video(str(path)))
+                    segs.append(Video(self._to_file_uri(path)))
                 case AudioContent():
                     segs.append(
-                        File(name=path.name, file=str(path))
+                        File(name=path.name, file=self._to_file_uri(path))
                         if self.cfg.audio_to_file
-                        else Record(str(path))
+                        else Record(self._to_file_uri(path))
                     )
                 case FileContent():
-                    segs.append(File(name=path.name, file=str(path)))
+                    segs.append(File(name=path.name, file=self._to_file_uri(path)))
 
         return segs
 
