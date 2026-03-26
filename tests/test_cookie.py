@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import sys
 import types
 from http.cookiejar import MozillaCookieJar
@@ -8,10 +8,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-ROOT = Path(__file__).resolve().parents[1]
-COOKIE_MODULE_PATH = ROOT / "core" / "cookie.py"
-PACKAGE_NAME = "test_cookie_runtime"
 
 
 @pytest.fixture
@@ -21,32 +17,20 @@ def cookie_module(monkeypatch: pytest.MonkeyPatch):
     )
 
     astrbot_pkg = types.ModuleType("astrbot")
+    astrbot_pkg.__path__ = []
     api_module = types.ModuleType("astrbot.api")
     api_module.logger = logger
     monkeypatch.setitem(sys.modules, "astrbot", astrbot_pkg)
     monkeypatch.setitem(sys.modules, "astrbot.api", api_module)
 
-    package_module = types.ModuleType(PACKAGE_NAME)
-    package_module.__path__ = [str(ROOT)]
-    monkeypatch.setitem(sys.modules, PACKAGE_NAME, package_module)
-
-    core_package = types.ModuleType(f"{PACKAGE_NAME}.core")
-    core_package.__path__ = [str(ROOT / "core")]
-    monkeypatch.setitem(sys.modules, f"{PACKAGE_NAME}.core", core_package)
-
-    config_module = types.ModuleType(f"{PACKAGE_NAME}.core.config")
+    config_module = types.ModuleType("core.config")
     config_module.ParserItem = object
     config_module.PluginConfig = object
-    monkeypatch.setitem(sys.modules, f"{PACKAGE_NAME}.core.config", config_module)
+    monkeypatch.setitem(sys.modules, "core.config", config_module)
 
-    spec = importlib.util.spec_from_file_location(
-        f"{PACKAGE_NAME}.core.cookie", COOKIE_MODULE_PATH
-    )
-    module = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, spec.name, module)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+    monkeypatch.delitem(sys.modules, "core.cookie", raising=False)
+
+    return importlib.import_module("core.cookie")
 
 
 def build_cookie_jar(
@@ -156,6 +140,24 @@ def test_header_cookie_value_containing_netscape_phrase_still_uses_header_parsin
     }
     assert load_cookie_file(jar.cookie_file) == {
         "foo": "netscape http cookie file",
+        "bar": "baz",
+    }
+
+
+def test_single_netscape_like_header_line_still_uses_header_parsing(
+    cookie_module, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(cookie_module.CookieJar, "save_to_file", lambda self: None)
+
+    jar = build_cookie_jar(
+        cookie_module,
+        tmp_path,
+        "foo=.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc123; bar=baz",
+        parser_name="instagram_single_row_header",
+    )
+
+    assert jar.get() == {
+        "foo": ".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc123",
         "bar": "baz",
     }
 

@@ -155,11 +155,14 @@ class CookieJar:
 
     @staticmethod
     def _is_netscape_cookie_file(cookies_str: str) -> bool:
+        valid_row_count = 0
         for line in cookies_str.splitlines():
             if line.strip().lower() == "# netscape http cookie file":
                 return True
             if CookieJar._parse_netscape_cookie_line(line) is not None:
-                return True
+                valid_row_count += 1
+                if valid_row_count >= 2:
+                    return True
         return False
 
     @staticmethod
