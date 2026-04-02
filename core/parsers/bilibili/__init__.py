@@ -47,6 +47,11 @@ class BilibiliParser(BaseParser):
         self.video_codecs = getattr(
             VideoCodecs, str(self.mycfg.video_codecs).upper(), VideoCodecs.AVC
         )
+        # 备选编码："无" 或未配置时为 None
+        _fb = str(self.mycfg.video_codecs_fallback or "").upper()
+        self.video_codecs_fallback = (
+            getattr(VideoCodecs, _fb, None) if _fb and _fb != "无" else None
+        )
 
         self.login = BilibiliLogin(config)
 
@@ -413,15 +418,40 @@ class BilibiliParser(BaseParser):
         # 获取下载数据
         download_url_data = await video.get_download_url(page_index=page_index)
         detecter = VideoDownloadURLDataDetecter(download_url_data)
-        streams = detecter.detect_best_streams(
-            video_max_quality=self.video_quality,
-            codecs=[self.video_codecs],
-            no_dolby_video=True,
-            no_hdr=True,
-        )
-        video_stream = streams[0]
-        if not isinstance(video_stream, VideoStreamDownloadURL):
+
+        # 构建编码回退列表：首选 → 配置的备选
+        fallback_order = [self.video_codecs]
+        if (
+            self.video_codecs_fallback is not None
+            and self.video_codecs_fallback != self.video_codecs
+        ):
+            fallback_order.append(self.video_codecs_fallback)
+
+        video_stream = None
+        audio_stream = None
+        used_codec = self.video_codecs
+
+        for codec in fallback_order:
+            streams = detecter.detect_best_streams(
+                video_max_quality=self.video_quality,
+                codecs=[codec],
+                no_dolby_video=True,
+                no_hdr=True,
+            )
+            if isinstance(streams[0], VideoStreamDownloadURL):
+                video_stream = streams[0]
+                audio_stream = streams[1]
+                used_codec = codec
+                break
+
+        if video_stream is None:
             raise DownloadException("未找到可下载的视频流")
+
+        if used_codec != self.video_codecs:
+            logger.info(
+                f"编码 {self.video_codecs.name} 不可用，"
+                f"回退到 {used_codec.name}"
+            )
         logger.debug(
             f"视频流质量: {video_stream.video_quality.name}, 编码: {video_stream.video_codecs}"
         )

@@ -159,6 +159,18 @@
                         ],
                         "default": "AVC"
                     },
+                    "video_codecs_fallback": {
+                        "description": "B站视频编码备选",
+                        "hint": "当首选编码不可用时自动回退到此编码。设为 无 则不回退",
+                        "type": "string",
+                        "options": [
+                            "无",
+                            "AVC",
+                            "AV1",
+                            "HEV"
+                        ],
+                        "default": "AVC"
+                    },
                     "video_quality": {
                         "description": "B站视频分辨率",
                         "hint": "下载B站视频的分辨率, 高画质可能需要登录才能下载成功",
