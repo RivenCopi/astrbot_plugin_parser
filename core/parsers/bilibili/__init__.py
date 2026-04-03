@@ -445,7 +445,8 @@ class BilibiliParser(BaseParser):
                 break
 
         if video_stream is None:
-            raise DownloadException("未找到可下载的视频流")
+            tried = "、".join(c.name for c in fallback_order)
+            raise DownloadException(f"未找到可下载的视频流（尝试编码：{tried}）")
 
         if used_codec != self.video_codecs:
             logger.info(
@@ -455,7 +456,9 @@ class BilibiliParser(BaseParser):
         logger.debug(
             f"视频流质量: {video_stream.video_quality.name}, 编码: {video_stream.video_codecs}"
         )
-
+        logger.info(
+            f"视频流质量: {video_stream.video_quality.name}, 编码: {video_stream.video_codecs}"
+        )
         audio_stream = streams[1]
         if not isinstance(audio_stream, AudioStreamDownloadURL):
             return video_stream.url, None

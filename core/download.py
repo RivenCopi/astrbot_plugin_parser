@@ -147,8 +147,9 @@ class Downloader:
                     await sleep(1 + attempt)
                     continue
                 logger.exception(f"下载失败 | url: {url}, file_path: {file_path}")
-                raise DownloadException("媒体下载失败") from exc
-        raise DownloadException("媒体下载失败")
+                reason = "请求超时" if isinstance(exc, TimeoutError) else f"请求失败 ({type(exc).__name__})"
+                raise DownloadException(f"媒体下载失败：{reason}") from exc
+        raise DownloadException("媒体下载失败：超过重试次数")
 
     @staticmethod
     def get_progress_bar(desc: str, total: int | None = None) -> tqdm:

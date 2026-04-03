@@ -165,9 +165,9 @@ class MessageSender:
                 path: Path = await cont.get_path()
             except (DownloadLimitException, ZeroSizeException):
                 continue
-            except DownloadException:
+            except DownloadException as e:
                 if self.cfg.show_download_fail_tip:
-                    segs.append(Plain("此项媒体下载失败"))
+                    segs.append(Plain(f"此项媒体下载失败：{e.message}"))
                 continue
 
             match cont:
@@ -189,9 +189,9 @@ class MessageSender:
             except SizeLimitException:
                 segs.append(Plain("此项媒体超过大小限制"))
                 continue
-            except DownloadException:
+            except DownloadException as e:
                 if self.cfg.show_download_fail_tip:
-                    segs.append(Plain("此项媒体下载失败"))
+                    segs.append(Plain(f"此项媒体下载失败：{e.message}"))
                 continue
 
             match cont:
