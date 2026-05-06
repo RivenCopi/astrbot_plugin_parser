@@ -44,16 +44,63 @@ class BilibiliParser(BaseParser):
         self.video_quality = getattr(
             VideoQuality, str(self.mycfg.video_quality).upper(), VideoQuality._720P
         )
-        self.video_codecs = getattr(
-            VideoCodecs, str(self.mycfg.video_codecs).upper(), VideoCodecs.AVC
-        )
-        # 备选编码："无" 或未配置时为 None
-        _fb = str(self.mycfg.video_codecs_fallback or "").upper()
-        self.video_codecs_fallback = (
-            getattr(VideoCodecs, _fb, None) if _fb and _fb != "无" else None
-        )
+
+        # --- 构建编码排序列表 ---
+        raw_order: list[str] = self.mycfg.video_codecs_order or []
+
+        if raw_order:
+            # 新配置：从排序列表中解析 VideoCodecs
+            codec_list = self._parse_codec_list(raw_order)
+        else:
+            # 兼容旧配置：从 video_codecs + video_codecs_fallback 构建
+            codec_list = self._build_codec_list_from_legacy()
+
+        # 确保 AVC、AV1、HEV 全部在列表中（去重、保序）
+        self.video_codecs_order = self._ensure_all_codecs(codec_list)
+
+        # 首选编码 = 排序列表第一个
+        self.video_codecs = self.video_codecs_order[0]
 
         self.login = BilibiliLogin(config)
+
+    @staticmethod
+    def _parse_codec_list(raw: list[str]) -> list:
+        """将字符串列表解析为 VideoCodecs 枚举列表，忽略无效值"""
+        result = []
+        for s in raw:
+            codec = getattr(VideoCodecs, str(s).upper(), None)
+            if codec is not None:
+                result.append(codec)
+        return result
+
+    def _build_codec_list_from_legacy(self) -> list:
+        """从旧配置字段 video_codecs / video_codecs_fallback 构建编码列表"""
+        primary = getattr(
+            VideoCodecs, str(self.mycfg.video_codecs or "AVC").upper(), VideoCodecs.AVC
+        )
+        result = [primary]
+
+        _fb = str(self.mycfg.video_codecs_fallback or "").upper()
+        fallback = getattr(VideoCodecs, _fb, None) if _fb and _fb != "无" else None
+        if fallback is not None and fallback != primary:
+            result.append(fallback)
+
+        return result
+
+    @staticmethod
+    def _ensure_all_codecs(existing: list) -> list:
+        """确保 AVC、AV1、HEV 全部在列表中（保序去重）"""
+        seen = set()
+        ordered = []
+        for c in existing:
+            if c not in seen:
+                seen.add(c)
+                ordered.append(c)
+        # 补充缺失的编码
+        for c in (VideoCodecs.AVC, VideoCodecs.AV1, VideoCodecs.HEV):
+            if c not in seen:
+                ordered.append(c)
+        return ordered
 
     @handle("b23.tv", r"b23\.tv/[A-Za-z\d\._?%&+\-=/#]+")
     @handle("bili2233", r"bili2233\.cn/[A-Za-z\d\._?%&+\-=/#]+")
@@ -419,19 +466,12 @@ class BilibiliParser(BaseParser):
         download_url_data = await video.get_download_url(page_index=page_index)
         detecter = VideoDownloadURLDataDetecter(download_url_data)
 
-        # 构建编码回退列表：首选 → 配置的备选
-        fallback_order = [self.video_codecs]
-        if (
-            self.video_codecs_fallback is not None
-            and self.video_codecs_fallback != self.video_codecs
-        ):
-            fallback_order.append(self.video_codecs_fallback)
-
+        # 按用户排序依次尝试所有编码
         video_stream = None
         audio_stream = None
         used_codec = self.video_codecs
 
-        for codec in fallback_order:
+        for codec in self.video_codecs_order:
             streams = detecter.detect_best_streams(
                 video_max_quality=self.video_quality,
                 codecs=[codec],
@@ -445,25 +485,20 @@ class BilibiliParser(BaseParser):
                 break
 
         if video_stream is None:
-            tried = "、".join(c.name for c in fallback_order)
+            tried = "、".join(c.name for c in self.video_codecs_order)
             raise DownloadException(f"未找到可下载的视频流（尝试编码：{tried}）")
 
-        if used_codec != self.video_codecs:
-            logger.info(
-                f"编码 {self.video_codecs.name} 不可用，"
-                f"回退到 {used_codec.name}"
-            )
+        used_idx = self.video_codecs_order.index(used_codec)
+        if used_idx > 0:
+            skipped = "、".join(c.name for c in self.video_codecs_order[:used_idx])
+            logger.info(f"编码 {skipped} 不可用，回退到 {used_codec.name}")
         logger.debug(
             f"视频流质量: {video_stream.video_quality.name}, 编码: {video_stream.video_codecs}"
         )
         logger.info(
             f"视频流质量: {video_stream.video_quality.name}, 编码: {video_stream.video_codecs}"
         )
-        audio_stream = streams[1]
         if not isinstance(audio_stream, AudioStreamDownloadURL):
             return video_stream.url, None
         logger.debug(f"音频流质量: {audio_stream.audio_quality.name}")
         return video_stream.url, audio_stream.url
-
-
-

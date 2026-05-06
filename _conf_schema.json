@@ -148,28 +148,20 @@
                         "type": "text",
                         "default": ""
                     },
-                    "video_codecs": {
-                        "description": "B站视频编码",
-                        "hint": "优先下载的编码类型，可选：AVC、AV1、HEV。推荐用兼容性较好的AVC",
-                        "type": "string",
+                    "video_codecs_order": {
+                        "description": "B站视频编码排序",
+                        "hint": "按序尝试编码：从上到下优先选择可用的编码格式。排序列表会自动补全缺失的 AVC/AV1/HEV。例如配置 [HEV, AVC]→实际按 HEV→AVC→AV1 的顺序尝试",
+                        "type": "list",
                         "options": [
                             "AVC",
                             "AV1",
                             "HEV"
                         ],
-                        "default": "AVC"
-                    },
-                    "video_codecs_fallback": {
-                        "description": "B站视频编码备选",
-                        "hint": "当首选编码不可用时自动回退到此编码。设为 无 则不回退",
-                        "type": "string",
-                        "options": [
-                            "无",
+                        "default": [
                             "AVC",
-                            "AV1",
-                            "HEV"
-                        ],
-                        "default": "AVC"
+                            "HEV",
+                            "AV1"
+                        ]
                     },
                     "video_quality": {
                         "description": "B站视频分辨率",

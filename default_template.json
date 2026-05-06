@@ -4,7 +4,7 @@
     "enable": true,
     "use_proxy": false,
     "cookies": "",
-    "video_codecs": "AVC",
+    "video_codecs_order": ["AVC", "HEV", "AV1"],
     "video_quality": "_720P"
   },
   {

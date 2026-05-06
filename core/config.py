@@ -155,6 +155,7 @@ class ParserItem(ConfigNode):
     cookies: str | None
     show_body_text: bool | None
     video_send_mode: str | None
+    video_codecs_order: list[str] | None
     video_codecs: str | None
     video_codecs_fallback: str | None
     video_quality: str | None
